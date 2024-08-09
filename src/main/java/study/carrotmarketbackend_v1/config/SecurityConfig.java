@@ -1,5 +1,6 @@
 package study.carrotmarketbackend_v1.config;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -12,14 +13,18 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.LogoutFilter;
+import org.springframework.web.cors.CorsConfiguration;
 import study.carrotmarketbackend_v1.document.MongoRefreshTokenRepository;
 import study.carrotmarketbackend_v1.jwt.CustomLogoutFilter;
 import study.carrotmarketbackend_v1.jwt.JWTFilter;
 import study.carrotmarketbackend_v1.jwt.JWTUtil;
 import study.carrotmarketbackend_v1.jwt.LoginFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
+
+import java.util.Collections;
 
 @Configuration
-@EnableWebSecurity
+@EnableWebSecurity(debug = true)
 public class SecurityConfig {
 
     private final AuthenticationConfiguration authenticationConfiguration;
@@ -48,26 +53,21 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
-//        http
-//                .cors(corsCustomizer -> corsCustomizer.configurationSource(new CorsConfigurationSource() {
-//
-//                    @Override
-//                    public CorsConfiguration getCorsConfiguration(HttpServletRequest request) {
-//
-//                        CorsConfiguration configuration = new CorsConfiguration();
-//
-//                        configuration.setAllowedOrigins(Collections.singletonList("http://localhost:3000"));
-//                        configuration.setAllowedMethods(Collections.singletonList("*"));
-//                        configuration.setAllowCredentials(true);
-//                        configuration.setAllowedHeaders(Collections.singletonList("*"));
-//                        configuration.setMaxAge(3600L);
-//
-//                        configuration.setExposedHeaders(Collections.singletonList("Set-Cookie"));
-//                        configuration.setExposedHeaders(Collections.singletonList("access"));
-//
-//                        return configuration;
-//                    }
-//                }));
+        http.cors(corsCustomizer -> corsCustomizer.configurationSource(request -> {
+
+            CorsConfiguration configuration = new CorsConfiguration();
+
+            configuration.setAllowedOrigins(Collections.singletonList("http://localhost:3000"));
+            configuration.setAllowedMethods(Collections.singletonList("*"));
+            configuration.setAllowCredentials(true);
+            configuration.setAllowedHeaders(Collections.singletonList("*"));
+            configuration.setMaxAge(3600L);
+
+            configuration.setExposedHeaders(Collections.singletonList("Set-Cookie"));
+            configuration.setExposedHeaders(Collections.singletonList("access"));
+
+            return configuration;
+        }));
 
         //csrf disable
         http.csrf(AbstractHttpConfigurer::disable);
@@ -78,14 +78,13 @@ public class SecurityConfig {
         //http basic 인증 방식 disable
         http.httpBasic(AbstractHttpConfigurer::disable);
 
-
         http.authorizeHttpRequests((auth) -> auth
-                        .requestMatchers( "/"
-                                ,"/api/members/login"
-                                ,"/api/members/signup"
-                                ,"/api/members/reissue").permitAll()
-                        .requestMatchers("/api/members/me").hasRole("USER")
-                        .anyRequest().authenticated());
+                .requestMatchers( "/"
+                        ,"/api/members/login"
+                        ,"/api/members/signup"
+                        ,"/api/members/reissue").permitAll()
+                .requestMatchers("/api/members/me").hasRole("USER")
+                .anyRequest().authenticated());
 
         http.addFilterBefore(new JWTFilter(jwtUtil), LoginFilter.class);
         http.addFilterAt(new LoginFilter(authenticationManager(authenticationConfiguration),mongoRefreshTokenRepository, jwtUtil), UsernamePasswordAuthenticationFilter.class);
@@ -94,7 +93,7 @@ public class SecurityConfig {
 
         //세션 설정
         http.sessionManagement((session) -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         return http.build();
     }
