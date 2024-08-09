@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import study.carrotmarketbackend_v1.dto.ApiResponse;
 import study.carrotmarketbackend_v1.dto.CreateMember;
@@ -33,7 +34,7 @@ public class MemberController {
 
     @GetMapping("/me")
     public ResponseEntity<String> getUserDetails() {
-
+        log.info("해당 정보 : {} ", SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString());
         return ResponseEntity.ok("사용중입니당~");
     }
 }

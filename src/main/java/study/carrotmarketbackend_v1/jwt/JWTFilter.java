@@ -1,15 +1,18 @@
 package study.carrotmarketbackend_v1.jwt;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
+import study.carrotmarketbackend_v1.dto.ApiResponse;
 import study.carrotmarketbackend_v1.dto.CustomUserDetails;
 import study.carrotmarketbackend_v1.entity.Member;
 
@@ -46,12 +49,22 @@ public class JWTFilter extends OncePerRequestFilter {
             jwtUtil.isExpired(accessToken);
         } catch (ExpiredJwtException e) {
 
-            //response body
-            PrintWriter writer = response.getWriter();
-            writer.print("access token expired");
+            // JSON 응답 설정
+            response.setContentType("application/json");
+            response.setCharacterEncoding("UTF-8");
+            response.setStatus(HttpStatus.UNAUTHORIZED.value());
 
-            //response status code
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            // ApiResponse 객체 생성
+            ApiResponse<String> apiResponse = new ApiResponse<>(
+                    HttpStatus.UNAUTHORIZED.value(),
+                    "access token expired",
+                    null
+            );
+
+            // 응답을 JSON으로 변환하여 클라이언트에게 전송
+            ObjectMapper objectMapper = new ObjectMapper();
+            String jsonResponse = objectMapper.writeValueAsString(apiResponse);
+            response.getWriter().write(jsonResponse);
             return;
         }
 

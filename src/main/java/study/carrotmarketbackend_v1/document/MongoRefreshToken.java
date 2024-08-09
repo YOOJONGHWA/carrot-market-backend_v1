@@ -1,6 +1,5 @@
 package study.carrotmarketbackend_v1.document;
 
-import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
