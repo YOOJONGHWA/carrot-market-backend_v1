@@ -12,19 +12,21 @@ import org.springframework.security.authentication.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.util.StreamUtils;
 import study.carrotmarketbackend_v1.document.MongoRefreshToken;
 import study.carrotmarketbackend_v1.document.MongoRefreshTokenRepository;
 import study.carrotmarketbackend_v1.dto.ApiResponse;
+import study.carrotmarketbackend_v1.dto.CustomUser;
 import study.carrotmarketbackend_v1.dto.LoginJwt;
+import study.carrotmarketbackend_v1.entity.User;
+import study.carrotmarketbackend_v1.repository.UserRepository;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Slf4j
 public class LoginFilter extends UsernamePasswordAuthenticationFilter {
@@ -37,7 +39,7 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
         this.authenticationManager = authenticationManager;
         this.mongoRefreshTokenRepository = mongoRefreshTokenRepository;
         this.jwtUtil = jwtUtil;
-        setFilterProcessesUrl("/api/members/login"); // 로그인 URL을 설정합니다.
+        setFilterProcessesUrl("/api/auth/login"); // 로그인 URL을 설정합니다.
     }
 
     private static final Map<Class<? extends AuthenticationException>, String> errorMessages = new HashMap<>();
@@ -67,42 +69,47 @@ public class LoginFilter extends UsernamePasswordAuthenticationFilter {
 
         String email = loginRequest.getEmail();
         String password = loginRequest.getPassword();
+        log.info("Password provided: {}", password); // **주의**: 실제로 비밀번호를 로그에 찍는 것은 위험할 수 있습니다. 로그는 디버깅용으로만 사용하세요.
 
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(email, password);
-
+        log.info("Attempting authentication with token: {}", authToken);
         return authenticationManager.authenticate(authToken);
     }
 
     @Override
     protected void successfulAuthentication(HttpServletRequest request, HttpServletResponse response, FilterChain chain, Authentication authentication) throws IOException {
 
-        // 유저 정보
-        String username = authentication.getName();
+        CustomUser customUserDetails = (CustomUser) authentication.getPrincipal();
+
+        String username = customUserDetails.getUsername();
         Collection<? extends GrantedAuthority> authorities = authentication.getAuthorities();
-        GrantedAuthority auth = authorities.iterator().next();
+        Iterator<? extends GrantedAuthority> iterator = authorities.iterator();
+        GrantedAuthority auth = iterator.next();
         String role = auth.getAuthority();
+        String memberId = String.valueOf(customUserDetails.getUserId());
 
         // 토큰 생성
-        String access = jwtUtil.createJwt("access", username, role, 600000L);
-        String refresh = jwtUtil.createJwt("refresh", username, role, 86400000L);
+        String access = jwtUtil.createJwt("Authorization", username, role, memberId, 10000L);
+        String refresh = jwtUtil.createJwt("refresh", username, role, memberId,86400000L);
 
         log.info("Generated Access Token: {}", access);
         log.info("Generated Refresh Token: {}", refresh);
 
-        // 기존 리프레시 토큰을 사용자 이름으로 찾아 삭제
-        Optional<MongoRefreshToken> existingToken = mongoRefreshTokenRepository.findByUsername(username);
+        // 기존 리프레시 토큰을 사용자 이름xx id로변경 을  찾아 삭제
+        Optional<MongoRefreshToken> existingToken = mongoRefreshTokenRepository.findByMemberId(memberId);
+
         if (existingToken.isPresent()) {
-            mongoRefreshTokenRepository.deleteByUsername(username);
+            mongoRefreshTokenRepository.deleteByMemberId(memberId);
         }
 
         // 새로운 리프레시 토큰 저장
-        jwtUtil.addRefreshMongo(username, refresh, 86400000L);
+        jwtUtil.addRefreshMongo(memberId, username, refresh, 86400000L);
 
         // JSON 응답 설정
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         response.setStatus(HttpStatus.OK.value());
-        response.setHeader("access", access);
+        response.setHeader("Authorization", access);
         response.addCookie(jwtUtil.createCookie("refresh", refresh));
 
         // ApiResponse 객체 생성

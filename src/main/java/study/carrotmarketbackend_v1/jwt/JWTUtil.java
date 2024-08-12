@@ -2,6 +2,7 @@ package study.carrotmarketbackend_v1.jwt;
 
 import io.jsonwebtoken.Jwts;
 import jakarta.servlet.http.Cookie;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import study.carrotmarketbackend_v1.document.MongoRefreshToken;
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Component
+@Slf4j
 public class JWTUtil {
 
     private final MongoRefreshTokenRepository mongoRefreshTokenRepository;
@@ -27,6 +29,11 @@ public class JWTUtil {
     public String getUsername(String token) {
 
         return Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token).getPayload().get("username", String.class);
+    }
+
+    public String getUserId(String token) {
+
+        return Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token).getPayload().get("userId", String.class);
     }
 
     public String getRole(String token) {
@@ -45,12 +52,13 @@ public class JWTUtil {
     }
 
 
-    public String createJwt(String category, String username, String role, Long expiredMs) {
+    public String createJwt(String category, String username, String role, String userId, Long expiredMs) {
 
         return Jwts.builder()
                 .claim("category", category)
                 .claim("username", username)
                 .claim("role", role)
+                .claim("userId", userId)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expiredMs))
                 .signWith(secretKey)
@@ -64,21 +72,21 @@ public class JWTUtil {
         cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setHttpOnly(true);
-
+        log.info("Setting cookie: name={}, value={}", cookie.getName(), cookie.getValue());
         return cookie;
     }
 
-    public void addRefreshMongo(String username, String refresh, Long expiredMs) {
+    public void addRefreshMongo(String userId, String username, String refresh, Long expiredMs) {
 
         Date date = new Date(System.currentTimeMillis() + expiredMs);
 
         MongoRefreshToken token = MongoRefreshToken.builder()
+                .memberId(userId)
                 .username(username)
                 .token(refresh)
-                .expiration(String.valueOf(date))
+                .expiration(date)
                 .build();
         mongoRefreshTokenRepository.save(token);
     }
-
 
 }

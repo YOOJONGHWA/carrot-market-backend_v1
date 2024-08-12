@@ -1,6 +1,6 @@
 package study.carrotmarketbackend_v1.config;
 
-import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -10,17 +10,17 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.LogoutFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import study.carrotmarketbackend_v1.document.MongoRefreshTokenRepository;
-import study.carrotmarketbackend_v1.jwt.CustomLogoutFilter;
-import study.carrotmarketbackend_v1.jwt.JWTFilter;
-import study.carrotmarketbackend_v1.jwt.JWTUtil;
-import study.carrotmarketbackend_v1.jwt.LoginFilter;
-import org.springframework.web.cors.CorsConfigurationSource;
+import study.carrotmarketbackend_v1.jwt.*;
+import study.carrotmarketbackend_v1.repository.UserRepository;
+import study.carrotmarketbackend_v1.service.CustomOAuth2UserService;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 @Configuration
@@ -30,70 +30,84 @@ public class SecurityConfig {
     private final AuthenticationConfiguration authenticationConfiguration;
     private final JWTUtil jwtUtil;
     private final MongoRefreshTokenRepository mongoRefreshTokenRepository;
+    private final CustomOAuth2UserService customOAuth2UserService;
+    private final CustomSuccessHandler customSuccessHandler;
 
-    public SecurityConfig(AuthenticationConfiguration authenticationConfiguration, JWTUtil jwtUtil, MongoRefreshTokenRepository mongoRefreshTokenRepository) {
+    @Autowired
+    public SecurityConfig(AuthenticationConfiguration authenticationConfiguration, JWTUtil jwtUtil, MongoRefreshTokenRepository mongoRefreshTokenRepository, CustomOAuth2UserService customOAuth2UserService, CustomSuccessHandler customSuccessHandler) {
         this.authenticationConfiguration = authenticationConfiguration;
         this.jwtUtil = jwtUtil;
         this.mongoRefreshTokenRepository = mongoRefreshTokenRepository;
+        this.customOAuth2UserService = customOAuth2UserService;
+        this.customSuccessHandler = customSuccessHandler;
     }
 
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
-
         return configuration.getAuthenticationManager();
     }
 
     @Bean
     public BCryptPasswordEncoder bCryptPasswordEncoder() {
-
         return new BCryptPasswordEncoder();
     }
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
+        // CORS 설정
         http.cors(corsCustomizer -> corsCustomizer.configurationSource(request -> {
-
             CorsConfiguration configuration = new CorsConfiguration();
-
             configuration.setAllowedOrigins(Collections.singletonList("http://localhost:3000"));
-            configuration.setAllowedMethods(Collections.singletonList("*"));
+            configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
             configuration.setAllowCredentials(true);
-            configuration.setAllowedHeaders(Collections.singletonList("*"));
-            configuration.setMaxAge(3600L);
-
-            configuration.setExposedHeaders(Collections.singletonList("Set-Cookie"));
-            configuration.setExposedHeaders(Collections.singletonList("access"));
-
+            configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept"));
+            configuration.setExposedHeaders(Arrays.asList("Set-Cookie", "Authorization"));
             return configuration;
         }));
 
-        //csrf disable
+        // CSRF 비활성화
         http.csrf(AbstractHttpConfigurer::disable);
 
-        //From 로그인 방식 disable
+        // 로그인 폼 비활성화
         http.formLogin(AbstractHttpConfigurer::disable);
 
-        //http basic 인증 방식 disable
+        // HTTP Basic 인증 비활성화
         http.httpBasic(AbstractHttpConfigurer::disable);
 
-        http.authorizeHttpRequests((auth) -> auth
-                .requestMatchers( "/"
-                        ,"/api/members/login"
-                        ,"/api/members/signup"
-                        ,"/api/members/reissue").permitAll()
-                .requestMatchers("/api/members/me").hasRole("USER")
-                .anyRequest().authenticated());
+        // OAuth2 로그인 설정
+        http.oauth2Login(oauth2 -> oauth2
+                .userInfoEndpoint(userInfoEndpointConfig -> userInfoEndpointConfig
+                        .userService(customOAuth2UserService))
+                .successHandler(customSuccessHandler)
+        );
 
-        http.addFilterBefore(new JWTFilter(jwtUtil), LoginFilter.class);
-        http.addFilterAt(new LoginFilter(authenticationManager(authenticationConfiguration),mongoRefreshTokenRepository, jwtUtil), UsernamePasswordAuthenticationFilter.class);
-        http.addFilterBefore(new CustomLogoutFilter(jwtUtil,mongoRefreshTokenRepository), LogoutFilter.class);
+        // URL 접근 제어 설정
+        http.authorizeHttpRequests(auth -> auth
+                .requestMatchers("/",
+                        "/api/auth/login",
+                        "/api/auth/signup",
+                        "/api/auth/reissue",
+                        "/api/oauth/callback").permitAll()
+//                .requestMatchers("/oauth2/authorization/naver").denyAll() // 이 경로에 대한 접근 차단
+                .requestMatchers("/api/auth/me",
+                        "api/auth/profile",
+                        "api/auth/update",
+                        "api/auth/change-password").hasRole("USER")
+                .anyRequest().authenticated()
+        );
+
+        // 필터 설정
+        http.addFilterBefore(new JWTFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class);
+        http.addFilterAt(new LoginFilter(authenticationManager(authenticationConfiguration), mongoRefreshTokenRepository ,jwtUtil), UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(new CustomLogoutFilter(jwtUtil, mongoRefreshTokenRepository), LogoutFilter.class);
 
 
-        //세션 설정
-        http.sessionManagement((session) -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        // 세션 설정
+        http.sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        );
 
         return http.build();
     }
