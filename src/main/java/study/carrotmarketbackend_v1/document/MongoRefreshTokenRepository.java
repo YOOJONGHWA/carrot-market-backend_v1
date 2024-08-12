@@ -14,11 +14,13 @@ public interface MongoRefreshTokenRepository extends MongoRepository<MongoRefres
     // 사용자 이름으로 토큰을 찾습니다.
     Optional<MongoRefreshToken> findByUsername(String username);
 
-
     @Transactional
     void deleteByUsername(String username);
 
     @Transactional
     void deleteByToken(String refresh);
 
+    Optional<MongoRefreshToken> findByMemberId(String memberId);
+
+    void deleteByMemberId(String memberId);
 }

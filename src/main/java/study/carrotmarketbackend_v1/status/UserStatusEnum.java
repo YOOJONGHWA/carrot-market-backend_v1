@@ -3,7 +3,7 @@ package study.carrotmarketbackend_v1.status;
 import lombok.Getter;
 
 @Getter
-public enum MemberStatusEnum implements BaseEnum {
+public enum UserStatusEnum implements BaseEnum {
 
     OK(200, "성공"),
     BAD_REQUEST(400, "잘못된 요청입니다."),
@@ -14,7 +14,7 @@ public enum MemberStatusEnum implements BaseEnum {
     public final int statusCode;
     public final String message;
 
-    MemberStatusEnum(int statusCode, String message) {
+    UserStatusEnum(int statusCode, String message) {
         this.statusCode = statusCode;
         this.message = message;
     }

@@ -1,6 +1,5 @@
 package study.carrotmarketbackend_v1.jwt;
 
-import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
@@ -27,7 +26,6 @@ public class CustomLogoutFilter extends GenericFilterBean {
         this.mongoRefreshTokenRepository = mongoRefreshTokenRepository;
     }
 
-
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
         doFilter((HttpServletRequest) request, (HttpServletResponse) response, chain);
@@ -35,77 +33,61 @@ public class CustomLogoutFilter extends GenericFilterBean {
 
     private void doFilter(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws IOException, ServletException {
 
-        //path and method verify
+        // Path and method verification
         String requestUri = request.getRequestURI();
-        if (!requestUri.matches("^\\/api/members/logout$")) {
-
+        if (!requestUri.matches("^\\/api/auth/logout$")) {
             filterChain.doFilter(request, response);
             return;
         }
+
         String requestMethod = request.getMethod();
         if (!requestMethod.equals("POST")) {
-
             filterChain.doFilter(request, response);
             return;
         }
 
-        //get refresh token
-        String refresh = null;
+        // 쿠키에서 리프레시 토큰 확인
+        Cookie refreshCookie = null;
         Cookie[] cookies = request.getCookies();
-        for (Cookie cookie : cookies) {
 
-            if (cookie.getName().equals("refresh")) {
-
-                refresh = cookie.getValue();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if (cookie.getName().equals("refresh")) {
+                    refreshCookie = cookie;
+                }
             }
         }
 
-        //refresh null check
-        if (refresh == null) {
+        // 리프레시 쿠키가 있는 경우 처리
+        if (refreshCookie != null) {
+            String refresh = refreshCookie.getValue();
 
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            return;
-        }
+            // 토큰이 refresh인지 확인 (발급 시 페이로드에 명시된 카테고리 확인)
+            String category = jwtUtil.getCategory(refresh);
+            if (!category.equals("refresh")) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                return;
+            }
 
-        //expired check
-        try {
-            jwtUtil.isExpired(refresh);
-        } catch (ExpiredJwtException e) {
+            // DB에서 리프레시 토큰 확인 및 삭제
+            Optional<MongoRefreshToken> isExist = mongoRefreshTokenRepository.findByToken(refresh);
+            if (isExist.isPresent()) {
+                mongoRefreshTokenRepository.deleteByToken(refresh);
+                log.info("DB에서 리프레시 토큰이 삭제되었습니다.");
 
-            //response status code
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            return;
-        }
-
-        // 토큰이 refresh인지 확인 (발급시 페이로드에 명시)
-        String category = jwtUtil.getCategory(refresh);
-        if (!category.equals("refresh")) {
-
-            //response status code
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            return;
-        }
-
-        //DB에 저장되어 있는지 확인
-        Optional<MongoRefreshToken> isExist = mongoRefreshTokenRepository.findByToken(refresh);
-        if (isExist.isPresent()) {
-
-            //로그아웃 진행
-            //Refresh 토큰 DB에서 제거
-            mongoRefreshTokenRepository.deleteByToken(refresh);
-
-            //Refresh 토큰 Cookie 값 0
-            Cookie cookie = new Cookie("refresh", null);
-            cookie.setMaxAge(0);
-            cookie.setPath("/");
-
-            response.addCookie(cookie);
-            response.setStatus(HttpServletResponse.SC_OK);
-            log.info("refresh : {}",refresh + "제거 완료!!");
-        }
-        else {
-            //response status code
+                // 리프레시 쿠키 무효화
+                Cookie invalidatedRefreshCookie = new Cookie("refresh", null);
+                invalidatedRefreshCookie.setMaxAge(0);
+                invalidatedRefreshCookie.setPath("/");
+                response.addCookie(invalidatedRefreshCookie);
+                response.setStatus(HttpServletResponse.SC_OK);
+                log.info("리프레시 쿠키가 무효화되었습니다.");
+            } else {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            }
+        } else {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         }
     }
 }
+

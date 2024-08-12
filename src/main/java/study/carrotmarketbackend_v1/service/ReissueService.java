@@ -78,17 +78,18 @@ public class ReissueService {
 
         String username = jwtUtil.getUsername(refresh);
         String role = jwtUtil.getRole(refresh);
+        String userId = jwtUtil.getUserId(refresh);
 
         //make new JWT
-        String newAccess = jwtUtil.createJwt("access", username, role, 600000L);
-        String newRefresh = jwtUtil.createJwt("refresh", username, role, 86400000L);
+        String newAccess = jwtUtil.createJwt("Authorization", username, role, userId, 10000L);
+        String newRefresh = jwtUtil.createJwt("refresh", username, role, userId, 86400000L);
 
         //Refresh 토큰 저장 DB에 기존의 Refresh 토큰 삭제 후 새 Refresh 토큰 저장
         mongoRepository.deleteByToken(refresh);
-        jwtUtil.addRefreshMongo(username, newRefresh, 86400000L);
+        jwtUtil.addRefreshMongo(userId, username, newRefresh, 86400000L);
 
         //response
-        response.setHeader("access", newAccess);
+        response.setHeader("Authorization", newAccess);
         response.addCookie(jwtUtil.createCookie("refresh", newRefresh));
 
         new ResponseEntity<>(HttpStatus.OK);

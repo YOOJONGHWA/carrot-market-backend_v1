@@ -9,6 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.Date;
+
 @Getter
 @Builder
 @NoArgsConstructor
@@ -19,8 +21,9 @@ public class MongoRefreshToken {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private String  id;
+    private String memberId;
     private String username;
     private String token;
-    private String expiration;
+    private Date expiration;
 
 }

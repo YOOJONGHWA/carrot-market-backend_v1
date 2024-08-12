@@ -4,9 +4,9 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
-import study.carrotmarketbackend_v1.entity.Member;
+import study.carrotmarketbackend_v1.entity.User;
 
-public class CreateMember {
+public class CreateUser {
 
     @Getter
     @Setter
@@ -16,7 +16,7 @@ public class CreateMember {
     public static class Request {
 
         @NotBlank(message = "이름은 필수 항목입니다.")
-        private String name;
+        private String username;
 
         @Email(message = "유효한 이메일 주소를 입력해야 합니다.")
         @NotBlank(message = "이메일은 필수 항목입니다.")
@@ -42,7 +42,7 @@ public class CreateMember {
     public static class Response {
 
         private Long id;
-        private String name;
+        private String username;
 
         private String email;
 
@@ -54,16 +54,16 @@ public class CreateMember {
 
         private String role;
 
-        public static Response fromEntity(Member member) {
+        public static Response fromEntity(User user) {
             // 엔티티를 DTO로 변환하는 변환 메서드 호출
-            AddressDTO addressDTO = AddressDTO.fromEntity(member.getAddress());
+            AddressDTO addressDTO = AddressDTO.fromEntity(user.getAddress());
             return Response.builder()
-                    .id(member.getId())
-                    .name(member.getName())
-                    .email(member.getEmail())
-                    .phone(member.getPhone())
+                    .id(user.getId())
+                    .username(user.getUsername())
+                    .email(user.getEmail())
+                    .phone(user.getPhone())
                     .address(addressDTO)
-                    .role(member.getRole())
+                    .role(user.getRole())
                     .build();
         }
     }
